@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0c1d19" />
+    <title>ZhasylQala — план озеленения Павлодара</title>
+    <link rel="preconnect" href="https://tiles.openfreemap.org" />
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.19.0/dist/maplibre-gl.css" />
+    <link rel="stylesheet" href="./style.css" />
+    <link rel="stylesheet" href="./enhancements.css" />
+    <link rel="stylesheet" href="./mvp.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand" aria-label="ZhasylQala">
+          <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 36 36" fill="none"><path d="M18 29V16m0 7c-6.5 0-10-4.3-10-10 5.6 0 10 3.3 10 10Zm0-4c0-7.2 4-11 10-11 0 6.2-3.8 11-10 11Z" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="brand-type">Zhasyl<span>Qala</span></span>
+        </div>
+        <span class="header-divider"></span>
+        <div class="header-context"><span class="header-kicker">Планирование озеленения</span><strong>Павлодар</strong></div>
+        <div class="header-spacer"></div>
+        <div class="header-status"><span class="status-dot"></span><span>Демонстрационный прототип</span></div>
+        <button class="header-help" id="aboutBtn" type="button" aria-label="О данных и расчётах">?</button>
+      </header>
+
+      <main class="workspace">
+        <aside class="left-panel" aria-label="Участки и слои">
+          <div class="panel-section panel-intro">
+            <div class="section-eyebrow">РАБОЧАЯ КАРТА <span>01 / 03</span></div>
+            <h1>Где посадить<br /><em>деревья?</em></h1>
+            <p>Отметьте участок, выберите породу и оцените стоимость посадки вместе с уходом.</p>
+          </div>
+
+          <div class="panel-section">
+            <div class="section-head"><h2>Инструмент</h2><span>GEOJSON</span></div>
+            <div class="tool-segment" role="group" aria-label="Режим карты">
+              <button class="tool-btn active" data-mode="select" type="button" aria-pressed="true"><span class="tool-icon">⌖</span>Обзор</button>
+              <button class="tool-btn" data-mode="point" type="button" aria-pressed="false"><span class="tool-icon">⊙</span>Точка</button>
+              <button class="tool-btn" data-mode="polygon" type="button" aria-pressed="false"><span class="tool-icon">⬡</span>Участок</button>
+            </div>
+            <p class="tool-hint" id="toolHint">Выберите точку на карте или участок в списке.</p>
+          </div>
+
+          <div class="panel-section sites-section">
+            <div class="section-head"><h2>Участки</h2><span id="siteCount">03</span></div>
+            <div class="sites-list" id="sitesList" aria-label="Список участков"></div>
+            <div class="file-actions">
+              <button type="button" class="text-action" id="importBtn">↑ Загрузить GeoJSON</button>
+              <button type="button" class="text-action" id="exportBtn">↓ Скачать план</button>
+              <input id="geojsonFile" type="file" accept=".json,.geojson,application/geo+json,application/json" hidden />
+            </div>
+            <div id="importQuality" class="import-quality">GeoJSON: координаты WGS84, точки или непересекающиеся полигоны.</div>
+          </div>
+
+          <div class="panel-section layers-section">
+            <div class="section-head"><h2>Слои карты</h2><span>ИСТОЧНИКИ</span></div>
+            <label class="layer-row"><span class="layer-swatch layer-base"></span><span class="layer-copy"><strong>Городская карта</strong><small>OpenStreetMap · актуальная подложка</small></span><span class="layer-fixed">ВКЛ</span></label>
+            <label class="layer-row"><span class="layer-swatch layer-land"></span><span class="layer-copy"><strong>Покров земли</strong><small>ESA WorldCover · снимки 2021</small></span><input type="checkbox" id="landcoverToggle" aria-label="Показать слой покрова земли" /></label>
+            <label class="layer-row"><span class="layer-swatch layer-ndvi"></span><span class="layer-copy"><strong>Индекс зелени NDVI</strong><small>ESA · снимки 2021</small></span><input type="checkbox" id="ndviToggle" aria-label="Показать индекс зелени" /></label>
+            <label class="layer-row"><span class="layer-swatch layer-problem"></span><span class="layer-copy"><strong>Проблемные зоны</strong><small>Предварительный анализ</small></span><input type="checkbox" id="problemLayerToggle" checked aria-label="Показать проблемные зоны" /></label>
+            <label class="layer-row"><span class="layer-swatch layer-priority"></span><span class="layer-copy"><strong>Приоритеты</strong><small>Индекс 0–100</small></span><input type="checkbox" id="priorityLayerToggle" aria-label="Показать приоритеты" /></label>
+            <div class="layer-note">Почвенный слой: данных организатора пока нет.</div>
+            <div class="cover-legend" id="coverLegend" hidden><span><i class="legend-tree"></i>Деревья</span><span><i class="legend-built"></i>Застройка</span><span><i class="legend-grass"></i>Трава</span><span><i class="legend-water"></i>Вода</span></div>
+            <p class="layer-note" id="layerStatus">Спутниковые слои показывают районный контекст, а не пригодность конкретной ямы.</p>
+          </div>
+          <div class="panel-section problem-section">
+            <div class="section-head"><h2>Проблемные зоны</h2><span id="problemCount">—</span></div>
+            <p class="field-note">Предварительный анализ по данным зоны. Демо-показатели помечены.</p>
+            <label class="field-label" for="problemFilter">Показать</label>
+            <select id="problemFilter"><option value="all">Все проблемы</option><option value="high">Высокая острота</option><option value="medium">Средняя острота</option><option value="low">Низкая острота</option></select>
+            <div id="problemList" class="problem-list"></div>
+          </div>
+          <div class="panel-section priority-section">
+            <div class="section-head"><h2>Очередь посадок</h2><span id="planCount">03 / 03</span></div>
+            <p class="field-note">Индекс 0–100: дефицит зелени, социальная значимость, нагрузка и эффект на бюджет.</p>
+            <div id="priorityWeights" class="priority-weights"></div>
+            <label class="field-label" for="cityBudget">Бюджет на все участки</label>
+            <div class="input-unit"><input id="cityBudget" type="number" inputmode="decimal" min="0" step="100000" value="2000000" /><span>₸</span></div>
+            <button class="plan-btn" id="planBtn" type="button">Составить план ↗</button>
+            <button class="report-btn" id="reportBtn" type="button">↓ Скачать отчёт по участкам</button>
+            <a class="text-action" href="./EXAMPLE_REPORT.html" target="_blank" rel="noopener">Посмотреть пример отчёта ↗</a>
+            <div id="priorityResult" class="priority-result">Рассчитаем очередь по индексу приоритета, ожидаемой кроне и полной стоимости.</div>
+          </div>
+        </aside>
+
+        <section class="map-stage" aria-label="Карта Павлодара">
+          <div id="map" role="application" aria-label="Интерактивная карта Павлодара"></div>
+          <div class="map-loading" id="mapLoading"><span class="map-loading-ring"></span><span>Загружаем карту Павлодара…</span></div>
+          <div class="map-topnote"><span class="topnote-icon">i</span><span>Демо-зоны и точки служат для проверки сценария. Место посадки требует выезда.</span></div>
+          <div class="map-tools"><button id="homeBtn" type="button" title="К Павлодару" aria-label="Показать Павлодар">⌂</button><button id="zoomInBtn" type="button" title="Приблизить" aria-label="Приблизить">+</button><button id="zoomOutBtn" type="button" title="Отдалить" aria-label="Отдалить">−</button></div>
+          <div class="map-bottom"><span class="map-coordinate" id="mapCoordinate">52.2873° N · 76.9674° E</span><span class="map-credit">Основа: OpenFreeMap / OSM</span></div>
+        </section>
+
+        <aside class="right-panel" aria-label="План посадки">
+          <div class="right-head"><div class="section-eyebrow">СЦЕНАРИЙ ПОСАДКИ <span>02 / 03</span></div><div class="right-title-line"><h2 id="selectedName">Демо-участок A</h2><span class="demo-pill">ДЕМО</span></div><p id="selectedMeta">Примерная точка на карте · осмотр не проведён</p></div>
+          <div class="right-scroll">
+            <div class="location-strip"><span class="location-icon">⌖</span><div><small>КООРДИНАТЫ УЧАСТКА</small><strong id="selectedCoords">—</strong></div><button id="focusBtn" type="button" aria-label="Показать участок на карте">↗</button></div>
+            <div class="site-actions"><label for="siteName">Название участка</label><div class="site-name-row"><input id="siteName" type="text" maxlength="70" aria-label="Название участка" /><button id="deleteSiteBtn" type="button" title="Удалить этот участок">Удалить</button></div></div>
+
+            <section class="evidence-section" aria-live="polite"><div class="section-head"><h3>Что видно на снимке</h3><span id="coverBadge">ESA · 2021</span></div><strong id="coverClass">Загружаем…</strong><p id="coverDetails">Проверяем поверхность в точке и рядом с ней.</p><p class="evidence-source">5 выборок WorldCover в пределах примерно 40 м. Снимок показывает тип покрова в 2021 году, но не подтверждает свободное место для посадки.</p></section>
+
+            <section class="checks-section"><div class="section-head"><h3>Проверка участка</h3><span>ВРУЧНУЮ</span></div><div class="check-grid"><div><label class="field-label" for="soilCheck">Почва</label><select id="soilCheck"><option value="unknown">Не проверена</option><option value="ok">Проверена специалистом</option><option value="prep">Нужна подготовка</option></select></div><div><label class="field-label" for="waterCheck">Источник воды</label><select id="waterCheck"><option value="unknown">Не проверен</option><option value="yes">Доступен</option><option value="no">Не доступен</option></select></div><div><label class="field-label" for="utilityCheck">Подземные сети</label><select id="utilityCheck"><option value="unknown">Не проверены</option><option value="clear">Конфликта нет</option><option value="conflict">Есть конфликт</option></select></div><div><label class="field-label" for="landCheck">Право на участок</label><select id="landCheck"><option value="unknown">Не проверено</option><option value="yes">Согласовано</option><option value="no">Не согласовано</option></select></div></div><div id="checkStatus" class="check-status">Данные требуют проверки на месте.</div></section>
+
+            <section class="mvp-section"><div class="section-head"><h3>Условия зоны</h3><span id="zoneDataBadge">ДЕМО / РУЧНОЕ</span></div><div id="zoneFacts" class="zone-facts"></div><div id="dataQuality" class="data-quality"></div><div class="mvp-grid">
+              <label>Назначение<select id="zonePurpose"><option value="park">Парк / сквер</option><option value="courtyard">Двор</option><option value="street">Улица</option><option value="school">Школа / детсад</option><option value="hospital">Больница</option></select></label>
+              <label>Почва<select id="zoneSoil"><option value="unknown">Нет данных</option><option value="loam">Суглинок</option><option value="sand">Песчаная</option><option value="saline">Засоленная</option></select></label>
+              <label>Освещённость<select id="zoneLight"><option value="unknown">Нет данных</option><option value="sun">Открытое солнце</option><option value="shade">Полутень / тень</option></select></label>
+              <label>Дорога рядом<select id="zoneRoad"><option value="unknown">Нет данных</option><option value="yes">Да (вручную)</option><option value="no">Нет (вручную)</option></select></label>
+              <label>Свободная ширина, м<input id="zoneClearance" type="number" min="0" max="50" step="0.5" /></label>
+              <label>Доля зелени, %<input id="zoneGreen" type="number" min="0" max="100" step="1" placeholder="Нет данных" /></label>
+            </div><p class="field-note">Поля зоны вводит специалист. Стартовые значения демо-зон синтетические; спутниковая выборка показана выше отдельно.</p></section>
+
+            <section class="form-section">
+              <div class="section-head"><h3>Посадка</h3><span>1 / 2</span></div>
+              <label class="field-label" for="speciesSelect">Порода дерева</label>
+              <select id="speciesSelect"></select>
+              <div class="field-note">Стартовый список основан на сообщении акимата Павлодара. Параметры модели — допущения.</div>
+              <div class="mvp-grid"><label>Схема посадки<select id="plantingScheme"><option value="single">Один вид</option><option value="mixed">70% + 30% двух видов</option></select></label><label>Второй вид<select id="secondarySpecies"></select></label></div><div id="schemeStatus" class="field-note"></div>
+              <div class="field-grid"><div><label class="field-label" for="treeCount">Количество</label><div class="input-unit"><input id="treeCount" type="number" inputmode="numeric" min="1" max="5000" step="1" /><span>шт.</span></div></div><div><label class="field-label" for="budget">Лимит бюджета</label><div class="input-unit"><input id="budget" type="number" inputmode="decimal" min="0" step="10000" /><span>₸</span></div></div></div>
+            </section>
+
+            <section class="form-section">
+              <div class="section-head"><h3>Уход и цены</h3><span>2 / 2</span></div>
+              <label class="field-label" for="watering">Полив в тёплый сезон <strong id="wateringValue">2 раза / неделю</strong></label>
+              <input type="range" id="watering" min="0" max="4" step="1" value="2" />
+              <div class="range-ends"><span>Без полива</span><span>4 раза / неделю</span></div>
+              <div class="cost-grid"><div><label class="field-label" for="seedlingCost">Саженец</label><div class="input-unit"><input id="seedlingCost" type="number" inputmode="decimal" min="0" step="500" /><span>₸</span></div></div><div><label class="field-label" for="plantingCost">Посадка</label><div class="input-unit"><input id="plantingCost" type="number" inputmode="decimal" min="0" step="500" /><span>₸</span></div></div></div>
+              <label class="field-label" for="annualCare">Уход за деревом в год, включая выбранный полив</label><div class="input-unit"><input id="annualCare" type="number" inputmode="decimal" min="0" step="500" /><span>₸ / год</span></div>
+              <div class="field-note">Цены примерные. Замените их местной сметой перед защитой проекта.</div>
+            </section>
+
+            <section class="climate-section" aria-live="polite"><div class="section-head"><h3>Климатический контекст</h3><span id="climateBadge">ЗАГРУЗКА</span></div><div id="climateContent" class="climate-content">Получаем исторические данные Open-Meteo…</div></section>
+
+            <section class="recommend-section"><div class="section-head"><h3>Подбор растений</h3><span>ОЦЕНКА 0–100</span></div><label class="field-label" for="compareGoal">Сортировать подходящие</label><select id="compareGoal"><option value="suitability">По пригодности</option><option value="balanced">По эффекту на бюджет</option><option value="cost">По стоимости</option><option value="survival">По приживаемости</option><option value="canopy">По кроне</option></select><div id="recommendationList" class="recommendation-list"></div><p class="recommend-note">Оценка основана на демонстрационных правилах и введённых условиях зоны. Неизвестные характеристики требуют проверки специалистом.</p></section>
+
+            <section class="result-section" aria-live="polite"><div class="section-head"><h3>Сценарий на 3 года</h3><span>ОЦЕНКА</span></div><div id="selectedSuitabilityStatus" class="selection-status"></div><div class="result-main"><div><small>ОЖИДАЕМО ЖИВЫХ ДЕРЕВЬЕВ</small><strong id="survivingTrees">—</strong><span id="survivalRate">—</span></div><div class="result-tree" aria-hidden="true">✳</div></div><div class="result-grid"><div><small>ПОЛНАЯ СТОИМОСТЬ</small><strong id="totalCost">—</strong></div><div><small>КРОНА К 3-МУ ГОДУ</small><strong id="canopyArea">—</strong></div></div><div class="budget-state" id="budgetState"></div><p class="model-disclaimer">Прогноз приживаемости и кроны — иллюстративная модель с открытыми допущениями, не результат полевого исследования.</p></section>
+            <section class="mvp-section"><div class="section-head"><h3>Подробная смета</h3><span>1–3 ГОДА</span></div><div class="mvp-grid"><label>Подготовка почвы, ₸/дерево<input id="preparationCost" type="number" min="0" step="500" /></label><label>Доставка, ₸/дерево<input id="deliveryCost" type="number" min="0" step="500" /></label><label>Срок ухода, лет<select id="careYears"><option value="1">1 год</option><option value="2">2 года</option><option value="3">3 года</option></select></label></div><div id="costBreakdown"></div></section>
+            <section class="mvp-section"><div class="section-head"><h3>Приживаемость и риски</h3><span>СИНТЕТИЧЕСКАЯ МОДЕЛЬ</span></div><div id="survivalAnalysis"></div></section>
+            <section class="mvp-section"><div class="section-head"><h3>План ухода по месяцам</h3><span>ПРЕДВАРИТЕЛЬНО</span></div><div id="careCalendar"></div></section>
+            <section class="mvp-section"><div class="section-head"><h3>Экологический эффект</h3><span>СЦЕНАРНАЯ ОЦЕНКА</span></div><div id="ecoEffect"></div></section>
+
+            <section class="next-section"><div class="section-head"><h3>Перед реальной посадкой</h3><span>ПРОВЕРИТЬ</span></div><ul><li>Почва и размеры посадочной ямы</li><li>Подземные сети и право на участок</li><li>Доступность воды и график ухода</li><li>Местная смета и согласование агронома</li></ul></section>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <dialog id="aboutDialog" class="about-dialog"><form method="dialog"><button class="dialog-close" type="submit" aria-label="Закрыть">×</button></form><div class="section-eyebrow">О ПРОТОТИПЕ</div><h2>Данные и допущения</h2><p>ZhasylQala показывает предварительное планирование озеленения. Три демо-зоны, цены, свойства каталога и коэффициенты экологического эффекта синтетические; это не утверждённые городские данные.</p><div class="dialog-block"><strong>Подключённые источники</strong><ul><li><a href="https://openfreemap.org/" target="_blank" rel="noreferrer">OpenFreeMap / OpenStreetMap</a> — картографическая подложка.</li><li><a href="https://esa-worldcover.org/en/data-access" target="_blank" rel="noreferrer">ESA WorldCover</a> — обзорный покров земли за 2021 год, не карта почв.</li><li><a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noreferrer">Open-Meteo</a> — исторический сеточный климат.</li><li><a href="https://www.gov.kz/org/pavlodar/press/news/details/1223959?lang=ru" target="_blank" rel="noreferrer">Акимат Павлодара</a> — названия пород для стартового каталога.</li></ul></div><div class="dialog-block"><strong>Модель</strong><p>Приживаемость оценивается логистической регрессией, обученной на синтетических экспертных примерах. Почва, полив, дорожная нагрузка и затенение меняют прогноз; реальной проверки на посадках нет. Смета показывает отдельные статьи расходов. Приоритет учитывает введённую долю зелени, социальное назначение, нагрузку среды и эффект на бюджет. Коэффициенты CO₂ и осадков — демонстрационные. Все решения требуют полевой проверки.</p></div><form method="dialog"><button class="primary-btn" type="submit">Понятно</button></form></dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="https://unpkg.com/maplibre-gl@5.19.0/dist/maplibre-gl.js"></script>
+    <script src="./app.js"></script>
+    <script src="./mvp-model.js"></script>
+    <script src="./mvp.js"></script>
+  </body>
+</html>
