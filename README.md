@@ -27,7 +27,7 @@ python3 -m http.server 4186 --bind 127.0.0.1
 | Данные | Источник | Использование |
 | --- | --- | --- |
 | Карта | [OpenFreeMap](https://openfreemap.org/) / OpenStreetMap | Подложка и привязка контуров |
-| Покров, NDVI | [ESA WorldCover](https://esa-worldcover.org/en/data-access), обзорные слои 2021 года | Отдельный контекст; не карта почв или посадочных ям |
+| Покров, NDVI | [ESA WorldCover](https://esa-worldcover.org/en/data-access), обзорные слои 2021 года | Автоматическая классификация ячеек около 10 м; не фотография, текущая инвентаризация деревьев или карта посадочных ям |
 | Климат | [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api), 2023–2025 | Сеточные средние; не измерения конкретного участка |
 | Названия пород | [Сообщение акимата Павлодара](https://www.gov.kz/org/pavlodar/press/news/details/1223959?lang=ru) | Отправная точка каталога; свойства видов условные |
 

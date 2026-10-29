@@ -89,9 +89,9 @@ function checkIssues(site) {
   if(c.utilities==='conflict') blockers.push('конфликт с подземными сетями');
   if(c.land==='unknown') issues.push('право на участок');
   if(c.land==='no') blockers.push('посадка на участке не согласована');
-  if(site.coverClass==='Древесная растительность') issues.push('свободное место: на снимке 2021 года здесь деревья');
-  if(site.coverClass==='Застройка') issues.push('доступный грунт: на снимке 2021 года здесь застройка');
-  if(site.coverClass==='Вода') issues.push('актуальное состояние: на снимке 2021 года здесь вода');
+  if(site.coverClass==='Древесная растительность') issues.push('свободное место: WorldCover 2021 помечает центральную ячейку как древесный покров');
+  if(site.coverClass==='Застройка') issues.push('доступный грунт: WorldCover 2021 помечает центральную ячейку как застройку');
+  if(site.coverClass==='Вода') issues.push('актуальное состояние: WorldCover 2021 помечает центральную ячейку как воду');
   return {issues,blockers};
 }
 function centroid(geometry) {
@@ -191,7 +191,7 @@ async function loadCoverContext(site) {
   const center=centroid(site.geometry), key=center.map(n=>n.toFixed(5)).join(',');
   $('coverBadge').textContent='ESA · ЗАГРУЗКА';
   $('coverClass').textContent='Загружаем…';
-  $('coverDetails').textContent='Проверяем поверхность в точке и рядом с ней.';
+  $('coverDetails').textContent='Проверяем классификацию для точки и рядом с ней.';
   if(!coverCache.has(key)) {
     const lat=center[1], dLat=40/111320, dLon=40/(111320*Math.cos(lat*Math.PI/180));
     const points=[center,[center[0]+dLon,lat],[center[0]-dLon,lat],[center[0],lat+dLat],[center[0],lat-dLat]];
@@ -207,7 +207,7 @@ async function loadCoverContext(site) {
     site.coverClass=labels[0] || null;
     site.coverGreenSample=valid.length?valid.filter(label=>['Древесная растительность','Кустарники','Травяной покров'].includes(label)).length/valid.length:null;
     site.coverSampleCount=valid.length;
-    $('coverDetails').textContent=valid.length?`Рядом: ${[...counts.entries()].map(([label,n])=>`${label.toLowerCase()} ${n}/${valid.length}`).join(' · ')}.${site.coverClass==='Древесная растительность'?' На снимке уже есть деревья: проверьте свободное место.':''}`:'Сервис сейчас не вернул класс поверхности. Проверьте участок вручную.';
+    $('coverDetails').textContent=valid.length?`Из ${valid.length} ответов WorldCover: ${[...counts.entries()].map(([label,n])=>`${label.toLowerCase()} — ${n}`).join(' · ')}. Это классы ячеек 2021 года, а не подсчёт деревьев или подтверждение текущего состояния.${site.coverClass==='Древесная растительность'?' Проверьте, есть ли сейчас свободное место.':''}`:'Сервис сейчас не вернул класс поверхности. Проверьте участок вручную.';
     renderChecks(site);save();
     window.onCoverContextLoaded?.(site);
   } catch {
