@@ -329,9 +329,11 @@ function setMode(next) {
   $('toolHint').textContent=mode==='point'?'Нажмите на карту, чтобы поставить новую точку.':mode==='polygon'?'Нажимайте для вершин. Двойной щелчок завершит участок; Esc отменит.':'Выберите точку на карте или участок в списке.';
 }
 function addSite(geometry) {
+  if(state.sites.length>=100){toast('В локальном плане максимум 100 участков.');return false;}
   const n=state.sites.filter(s=>!s.demo).length+1;
   const site={id:`site-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,name:`Участок ${n}`,geometry,demo:false,scenario:defaultScenario('linden',10,2),checks:clone(CHECK_DEFAULTS)};
   state.sites.push(site); chooseSite(site.id,false); setMode('select'); focusSite(); invalidatePlan();toast('Участок добавлен. Он сохранён в этом браузере.');
+  return true;
 }
 function updateDraft() {
   if (!map?.getSource('draft')) return;
@@ -548,6 +550,14 @@ function downloadReport() {
 function bindUI() {
   $('speciesSelect').innerHTML=Object.entries(SPECIES).map(([id,s])=>`<option value="${id}">${s.name}</option>`).join('');
   document.querySelectorAll('.tool-btn').forEach(btn=>btn.addEventListener('click',()=>setMode(btn.dataset.mode)));
+  $('coordinateForm').addEventListener('submit',event=>{
+    event.preventDefault();
+    const result=CoordinateInput.parsePoint($('coordinateInput').value),status=$('coordinateStatus');
+    if(result.error){status.textContent=result.error;status.className='error';return;}
+    if(!addSite({type:'Point',coordinates:result.coordinates})){status.textContent='Локальный план заполнен: максимум 100 участков.';status.className='error';return;}
+    status.textContent=result.outsidePavlodar?'Точка добавлена вне района Павлодара. Проверьте широту и долготу.':'Точка добавлена точно по указанным координатам.';
+    status.className=result.outsidePavlodar?'warning':'success';
+  });
   for (const id of ['treeCount','budget','seedlingCost','plantingCost','annualCare']) $(id).addEventListener('change',readForm);
   $('watering').addEventListener('input',()=>{
     const tree=SPECIES[$('speciesSelect').value];

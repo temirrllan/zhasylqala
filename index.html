@@ -41,6 +41,13 @@
               <button class="tool-btn" data-mode="polygon" type="button" aria-pressed="false"><span class="tool-icon">⬡</span>Участок</button>
             </div>
             <p class="tool-hint" id="toolHint">Выберите точку на карте или участок в списке.</p>
+            <form id="coordinateForm" class="coordinate-form">
+              <label for="coordinateInput">Точка по точным координатам</label>
+              <input id="coordinateInput" type="text" inputmode="text" autocomplete="off" placeholder="52.28201, 76.97125" aria-describedby="coordinateHelp coordinateStatus" />
+              <button type="submit">Добавить точку ↗</button>
+              <p id="coordinateHelp">Сначала широта, затем долгота. Можно вставить «52.28201° N, 76.97125° E».</p>
+              <p id="coordinateStatus" role="status" aria-live="polite"></p>
+            </form>
           </div>
 
           <div class="panel-section sites-section">
@@ -153,6 +160,7 @@
     <dialog id="aboutDialog" class="about-dialog"><form method="dialog"><button class="dialog-close" type="submit" aria-label="Закрыть">×</button></form><div class="section-eyebrow">О ПРОТОТИПЕ</div><h2>Данные и допущения</h2><p>ZhasylQala показывает предварительное планирование озеленения. Три демо-зоны, цены, свойства каталога и коэффициенты экологического эффекта синтетические; это не утверждённые городские данные.</p><div class="dialog-block"><strong>Подключённые источники</strong><ul><li><a href="https://openfreemap.org/" target="_blank" rel="noreferrer">OpenFreeMap / OpenStreetMap</a> — картографическая подложка.</li><li><a href="https://esa-worldcover.org/en/data-access" target="_blank" rel="noreferrer">ESA WorldCover</a> — обзорный покров земли за 2021 год, не карта почв.</li><li><a href="https://open-meteo.com/en/docs/historical-weather-api" target="_blank" rel="noreferrer">Open-Meteo</a> — исторический сеточный климат.</li><li><a href="https://www.gov.kz/org/pavlodar/press/news/details/1223959?lang=ru" target="_blank" rel="noreferrer">Акимат Павлодара</a> — названия пород для стартового каталога.</li></ul></div><div class="dialog-block"><strong>Модель</strong><p>Приживаемость оценивается логистической регрессией, обученной на синтетических экспертных примерах. Почва, полив, дорожная нагрузка и затенение меняют прогноз; реальной проверки на посадках нет. Смета показывает отдельные статьи расходов. Приоритет учитывает введённую долю зелени, социальное назначение, нагрузку среды и эффект на бюджет. Коэффициенты CO₂ и осадков — демонстрационные. Все решения требуют полевой проверки.</p></div><form method="dialog"><button class="primary-btn" type="submit">Понятно</button></form></dialog>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script src="https://unpkg.com/maplibre-gl@5.19.0/dist/maplibre-gl.js"></script>
+    <script src="./coordinate-input.js"></script>
     <script src="./evidence-review.js"></script>
     <script src="./app.js"></script>
     <script src="./mvp-model.js"></script>
