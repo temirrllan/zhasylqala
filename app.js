@@ -89,9 +89,17 @@ function checkIssues(site) {
   if(c.utilities==='conflict') blockers.push('конфликт с подземными сетями');
   if(c.land==='unknown') issues.push('право на участок');
   if(c.land==='no') blockers.push('посадка на участке не согласована');
-  if(site.coverClass==='Древесная растительность') issues.push('свободное место: WorldCover 2021 помечает центральную ячейку как древесный покров');
-  if(site.coverClass==='Застройка') issues.push('доступный грунт: WorldCover 2021 помечает центральную ячейку как застройку');
-  if(site.coverClass==='Вода') issues.push('актуальное состояние: WorldCover 2021 помечает центральную ячейку как воду');
+  const review=EvidenceReview.compare(site.coverClass,site.observation);
+  if(review.status==='conflict') {
+    const message='WorldCover 2021 расходится с ручной отметкой поверхности';
+    if(review.observation.source==='map') blockers.push(`${message}: нужен осмотр на месте`);
+    else issues.push(`${message}: проверьте границы участка и сохраните полевое подтверждение`);
+  } else {
+    if(site.coverClass==='Древесная растительность') issues.push('свободное место: WorldCover 2021 помечает центральную ячейку как древесный покров');
+    if(site.coverClass==='Застройка') issues.push('доступный грунт: WorldCover 2021 помечает центральную ячейку как застройку');
+    if(site.coverClass==='Вода') issues.push('актуальное состояние: WorldCover 2021 помечает центральную ячейку как воду');
+  }
+  if(review.observation.source==='field' && ['built','water'].includes(review.observation.kind)) blockers.push('по ручной отметке осмотра нет доступного грунта для посадки');
   return {issues,blockers};
 }
 function centroid(geometry) {
@@ -135,6 +143,19 @@ function renderChecks(site) {
   if(result.blockers.length) box.textContent=`Не включать в план: ${result.blockers.join('; ')}.`;
   else if(result.issues.length) box.textContent=`Предварительный сценарий. Проверить: ${result.issues.join(', ')}.`;
   else box.textContent='Базовые проверки отмечены. Породу и место посадки должен подтвердить специалист.';
+}
+function renderEvidenceReview(site) {
+  const review=EvidenceReview.compare(site.coverClass,site.observation),o=review.observation;
+  $('surfaceObservation').value=o.kind;
+  $('observationSource').value=o.source;
+  $('observationDate').textContent=o.recordedAt?`Отмечено ${o.recordedAt} · ${EvidenceReview.SOURCES[o.source]}.`:'';
+  const box=$('evidenceComparison');
+  box.className='evidence-comparison '+review.status;
+  if(review.status==='unreviewed') box.textContent='Укажите, что видно сейчас. Это ваша отметка, приложение её не проверяет.';
+  else if(review.status==='uncomparable') box.textContent='Отметка сохранена. Нет сопоставимого класса WorldCover для этой точки.';
+  else if(review.status==='match') box.textContent='Отметка совпадает с классом WorldCover 2021. Точное место посадки всё равно нужно проверить на месте.';
+  else if(o.source==='map') box.textContent='Расхождение с WorldCover 2021. Зона не войдёт в бюджетный план до осмотра на месте.';
+  else box.textContent='Расхождение с WorldCover 2021 сохранено. Полевую отметку ввёл пользователь; границы и место посадки нужно подтвердить.';
 }
 
 function comparisonOptions(site) {
@@ -204,15 +225,25 @@ async function loadCoverContext(site) {
     valid.forEach(label=>counts.set(label,(counts.get(label)||0)+1));
     $('coverBadge').textContent='ESA · 2021';
     $('coverClass').textContent=labels[0] || 'В центральной точке нет данных';
+    const previousClass=site.coverClass;
     site.coverClass=labels[0] || null;
     site.coverGreenSample=valid.length?valid.filter(label=>['Древесная растительность','Кустарники','Травяной покров'].includes(label)).length/valid.length:null;
     site.coverSampleCount=valid.length;
     $('coverDetails').textContent=valid.length?`Из ${valid.length} ответов WorldCover: ${[...counts.entries()].map(([label,n])=>`${label.toLowerCase()} — ${n}`).join(' · ')}. Это классы ячеек 2021 года, а не подсчёт деревьев или подтверждение текущего состояния.${site.coverClass==='Древесная растительность'?' Проверьте, есть ли сейчас свободное место.':''}`:'Сервис сейчас не вернул класс поверхности. Проверьте участок вручную.';
-    renderChecks(site);save();
+    renderEvidenceReview(site);renderChecks(site);renderRecommendations(site);
+    if(previousClass!==site.coverClass)invalidatePlan();
+    save();
     window.onCoverContextLoaded?.(site);
   } catch {
     coverCache.delete(key);
-    if(selected().id===site.id){$('coverBadge').textContent='НЕТ ДАННЫХ';$('coverClass').textContent='WorldCover недоступен';$('coverDetails').textContent='Проверьте поверхность на местности.';}
+    if(selected().id===site.id){
+      const previousClass=site.coverClass;
+      site.coverClass=null;
+      $('coverBadge').textContent='НЕТ ДАННЫХ';$('coverClass').textContent='WorldCover недоступен';$('coverDetails').textContent='Проверьте поверхность на местности.';
+      renderEvidenceReview(site);renderChecks(site);renderRecommendations(site);
+      if(previousClass!==null)invalidatePlan();
+      save();window.onCoverContextLoaded?.(site);
+    }
   }
 }
 
@@ -254,6 +285,7 @@ function renderScenario() {
     const perTree=result.total/s.count;
     budget.textContent=`Превышение: ${money(result.total-s.budget)} · в лимит поместится около ${nf.format(Math.floor(s.budget/perTree))} деревьев`;
   } else budget.textContent=`В пределах лимита · остаток ${money(s.budget-result.total)}`;
+  renderEvidenceReview(site);
   renderChecks(site);
   renderRecommendations(site);
   save();
@@ -314,7 +346,7 @@ function finishPolygon() {
   addSite({type:'Polygon',coordinates:[[...unique,unique[0]]]});
 }
 function geojson() {
-  return {type:'FeatureCollection',name:'ZhasylQala Pavlodar plan',features:state.sites.map(site=>({type:'Feature',id:site.id,geometry:site.geometry,properties:{name:site.name,demo:site.demo,scenario:scenarioFor(site),checks:checksFor(site),mvp:site.mvp||null,model:'synthetic-expert-logistic-v1'}}))};
+  return {type:'FeatureCollection',name:'ZhasylQala Pavlodar plan',features:state.sites.map(site=>({type:'Feature',id:site.id,geometry:site.geometry,properties:{name:site.name,demo:site.demo,scenario:scenarioFor(site),checks:checksFor(site),observation:site.observation?EvidenceReview.normalize(site.observation):null,mvp:site.mvp||null,model:'synthetic-expert-logistic-v1'}}))};
 }
 function exportGeoJSON() {
   const blob=new Blob([JSON.stringify(geojson(),null,2)],{type:'application/geo+json'});
@@ -365,7 +397,8 @@ async function importGeoJSON(file) {
       const raw=f.properties?.scenario;
       const scenario=raw && typeof raw==='object'?{...defaultScenario(),...raw}:defaultScenario();
       const checks=f.properties?.checks && typeof f.properties.checks==='object'?f.properties.checks:CHECK_DEFAULTS;
-      state.sites.push({id,name,geometry:f.geometry,demo:false,scenario,checks,mvp:f.properties?.mvp&&typeof f.properties.mvp==='object'?f.properties.mvp:null});
+      const observation=f.properties?.observation&&typeof f.properties.observation==='object'?EvidenceReview.normalize(f.properties.observation):null;
+      state.sites.push({id,name,geometry:f.geometry,demo:false,scenario,checks,observation,mvp:f.properties?.mvp&&typeof f.properties.mvp==='object'?f.properties.mvp:null});
     }
     chooseSite(state.sites[state.sites.length-valid.length].id,true);
     invalidatePlan();
@@ -539,6 +572,13 @@ function bindUI() {
   $('reportBtn').addEventListener('click',downloadReport);
   $('compareGoal').addEventListener('change',()=>renderRecommendations(selected()));
   for(const id of ['soilCheck','waterCheck','utilityCheck','landCheck']) $(id).addEventListener('change',readChecks);
+  for(const id of ['surfaceObservation','observationSource']) $(id).addEventListener('change',()=>{
+    const site=selected(),kind=$('surfaceObservation').value;
+    site.observation=kind==='unknown'?null:EvidenceReview.normalize({kind,source:$('observationSource').value,recordedAt:new Date().toISOString().slice(0,10)});
+    renderEvidenceReview(site);renderChecks(site);renderRecommendations(site);
+    window.onObservationChanged?.(site);
+    invalidatePlan();save();
+  });
   $('siteName').addEventListener('change',()=>{
     const name=$('siteName').value.trim().slice(0,70);
     if(!name){$('siteName').value=selected().name;return;}
