@@ -61,6 +61,7 @@
             <label class="layer-row"><span class="layer-swatch layer-ndvi"></span><span class="layer-copy"><strong>Индекс зелени NDVI</strong><small>ESA · снимки 2021</small></span><input type="checkbox" id="ndviToggle" aria-label="Показать индекс зелени" /></label>
             <label class="layer-row"><span class="layer-swatch layer-problem"></span><span class="layer-copy"><strong>Проблемные зоны</strong><small>Предварительный анализ</small></span><input type="checkbox" id="problemLayerToggle" checked aria-label="Показать проблемные зоны" /></label>
             <label class="layer-row"><span class="layer-swatch layer-priority"></span><span class="layer-copy"><strong>Приоритеты</strong><small>Индекс 0–100</small></span><input type="checkbox" id="priorityLayerToggle" aria-label="Показать приоритеты" /></label>
+            <label class="layer-row"><span class="layer-swatch layer-planting"></span><span class="layer-copy"><strong>Посадочные точки</strong><small>Расчётная схема · проверить на месте</small></span><input type="checkbox" id="plantingLayerToggle" checked aria-label="Показать расчётные посадочные точки" /></label>
             <div class="layer-note">Почвенный слой: данных организатора пока нет.</div>
             <div class="cover-legend" id="coverLegend" hidden><span><i class="legend-tree"></i>Деревья</span><span><i class="legend-built"></i>Застройка</span><span><i class="legend-grass"></i>Трава</span><span><i class="legend-water"></i>Вода</span></div>
             <p class="layer-note" id="layerStatus">Спутниковые слои показывают районный контекст, а не пригодность конкретной ямы.</p>
@@ -119,6 +120,8 @@
               <div class="field-note">Стартовый список основан на сообщении акимата Павлодара. Параметры модели — допущения.</div>
               <div class="mvp-grid"><label>Схема посадки<select id="plantingScheme"><option value="single">Один вид</option><option value="mixed">70% + 30% двух видов</option></select></label><label>Второй вид<select id="secondarySpecies"></select></label></div><div id="schemeStatus" class="field-note"></div>
               <div class="field-grid"><div><label class="field-label" for="treeCount">Количество</label><div class="input-unit"><input id="treeCount" type="number" inputmode="numeric" min="1" max="5000" step="1" /><span>шт.</span></div></div><div><label class="field-label" for="budget">Лимит бюджета</label><div class="input-unit"><input id="budget" type="number" inputmode="decimal" min="0" step="10000" /><span>₸</span></div></div></div>
+              <div class="planting-layout" id="plantingLayoutStatus" aria-live="polite">Проверяем, помещается ли сценарий в контуре участка.</div>
+              <button class="text-action" id="downloadPlantingBtn" type="button" disabled>↓ Скачать расчётные точки GeoJSON</button>
             </section>
 
             <section class="form-section">
@@ -152,6 +155,7 @@
     <script src="https://unpkg.com/maplibre-gl@5.19.0/dist/maplibre-gl.js"></script>
     <script src="./app.js"></script>
     <script src="./mvp-model.js"></script>
+    <script src="./planting-layout.js"></script>
     <script src="./mvp.js"></script>
   </body>
 </html>

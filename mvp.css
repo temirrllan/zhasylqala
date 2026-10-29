@@ -9,6 +9,12 @@
 .empty-note{font-size:11px;color:#6d7c6d;line-height:1.5}
 .import-quality{font-size:9px;line-height:1.45;color:#6d7c6d;margin-top:9px}
 .layer-problem{background:#cb6651}.layer-priority{background:linear-gradient(135deg,#e5c26b,#b95f4e)}
+.layer-planting{background:#238057;border:2px solid #fff;box-shadow:0 0 0 1px #238057;border-radius:50%}
+.planting-layout{font-size:10px;line-height:1.5;border-radius:7px;padding:10px;margin-top:10px;background:#f6f2e9;color:#785a31}
+.planting-layout.ready{background:#e9f4eb;color:#285e3e}
+.planting-layout.blocked{border-left:3px solid #cb8646}
+#downloadPlantingBtn{margin-top:9px;text-align:left;line-height:1.4}
+#downloadPlantingBtn:disabled{opacity:.45;cursor:not-allowed}
 .priority-weights{display:grid;grid-template-columns:1fr 1fr;gap:9px 12px;margin-top:11px}
 .priority-weights label{display:grid;grid-template-columns:1fr auto;font-size:9px;font-weight:700;color:#49614e;gap:4px}
 .priority-weights strong{color:#23563d}.priority-weights input{grid-column:1/-1;width:100%;accent-color:#367b4d;height:12px;margin:0}

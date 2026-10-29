@@ -1,0 +1,182 @@
+{
+  "type": "FeatureCollection",
+  "name": "ZhasylQala · Демо-зона 1 · дефицит зелени · расчётные точки",
+  "properties": {
+    "status": "illustrative",
+    "note": "Точки требуют выездной проверки грунта, коммуникаций, существующих насаждений и права на посадку.",
+    "spacingMetres": 9,
+    "insetMetres": 4.5
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.95368797567077,
+          52.29297127200862
+        ]
+      },
+      "properties": {
+        "number": 1,
+        "siteId": "mvp-zone-1",
+        "siteName": "Демо-зона 1 · дефицит зелени",
+        "species": "linden",
+        "status": "illustrative"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.95302703487516,
+          52.29321381602587
+        ]
+      },
+      "properties": {
+        "number": 2,
+        "siteId": "mvp-zone-1",
+        "siteName": "Демо-зона 1 · дефицит зелени",
+        "species": "linden",
+        "status": "illustrative"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.95236609407955,
+          52.293456360043116
+        ]
+      },
+      "properties": {
+        "number": 3,
+        "siteId": "mvp-zone-1",
+        "siteName": "Демо-зона 1 · дефицит зелени",
+        "species": "linden",
+        "status": "illustrative"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.95500985726198,
+          52.29361805605461
+        ]
+      },
+      "properties": {
+        "number": 4,
+        "siteId": "mvp-zone-1",
+        "siteName": "Демо-зона 1 · дефицит зелени",
+        "species": "linden",
+        "status": "illustrative"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.95434891646637,
+          52.29386060007186
+        ]
+      },
+      "properties": {
+        "number": 5,
+        "siteId": "mvp-zone-1",
+        "siteName": "Демо-зона 1 · дефицит зелени",
+        "species": "linden",
+        "status": "illustrative"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.95368797567077,
+          52.29410314408911
+        ]
+      },
+      "properties": {
+        "number": 6,
+        "siteId": "mvp-zone-1",
+        "siteName": "Демо-зона 1 · дефицит зелени",
+        "species": "linden",
+        "status": "illustrative"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.95302703487516,
+          52.294345688106354
+        ]
+      },
+      "properties": {
+        "number": 7,
+        "siteId": "mvp-zone-1",
+        "siteName": "Демо-зона 1 · дефицит зелени",
+        "species": "linden",
+        "status": "illustrative"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.95236609407955,
+          52.2945882321236
+        ]
+      },
+      "properties": {
+        "number": 8,
+        "siteId": "mvp-zone-1",
+        "siteName": "Демо-зона 1 · дефицит зелени",
+        "species": "linden",
+        "status": "illustrative"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.95500985726198,
+          52.2947499281351
+        ]
+      },
+      "properties": {
+        "number": 9,
+        "siteId": "mvp-zone-1",
+        "siteName": "Демо-зона 1 · дефицит зелени",
+        "species": "linden",
+        "status": "illustrative"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          76.95434891646637,
+          52.294992472152344
+        ]
+      },
+      "properties": {
+        "number": 10,
+        "siteId": "mvp-zone-1",
+        "siteName": "Демо-зона 1 · дефицит зелени",
+        "species": "linden",
+        "status": "illustrative"
+      }
+    }
+  ]
+}

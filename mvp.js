@@ -17,6 +17,7 @@ const MVP_DEMO_ZONES=[
 const PURPOSE_LABELS={park:'Парк / сквер',courtyard:'Двор',street:'Улица',school:'Школа / детсад',hospital:'Больница'};
 const SOIL_LABELS={unknown:'нет данных',loam:'суглинок',sand:'песчаная',saline:'засоленная'};
 const ECO_COEFFICIENTS={co2KgPerCanopyM2Year:.6,rainM3PerCanopyM2Year:.02,annualRetention:.98};
+let currentPlantingLayout=null;
 
 function mvpPolygon(center) {
   const [x,y]=center,dx=.0017,dy=.00115;
@@ -60,6 +61,10 @@ function zoneArea(geometry) {
   for(let i=0;i<ring.length-1;i++) twice+=(ring[i][0]*scaleX)*(ring[i+1][1]*scaleY)-(ring[i+1][0]*scaleX)*(ring[i][1]*scaleY);
   return Math.abs(twice)/2;
 }
+function plantingLayoutFor(site, speciesIds, count) {
+  const spacing=Math.max(...speciesIds.map(id=>MVP_SPECIES[id]?.width||0));
+  return PlantingLayout.plan(site.geometry,count,spacing);
+}
 function inputFeatures(site,speciesId,wateringOverride) {
   const m=zoneFor(site), s=scenarioFor(site), tree=SPECIES[speciesId], meta=MVP_SPECIES[speciesId];
   return {
@@ -77,6 +82,11 @@ function suitability(site,speciesId) {
   if(m.clearance>0 && meta.width>m.clearance) blocks.push(`крона до ${meta.width} м шире свободного места ${m.clearance} м`);
   if(m.soil==='saline' && meta.salt===0) blocks.push('засоление: устойчивость вида не подтверждена');
   if(checkIssues(site).blockers.length) blocks.push(...checkIssues(site).blockers);
+  if(site.geometry.type==='Polygon'){
+    const layout=plantingLayoutFor(site,[speciesId],s.count);
+    if(layout.error) blocks.push(layout.error);
+    else if(layout.capacity<s.count) blocks.push(`в контуре помещается не более ${layout.capacity} деревьев при шаге ${meta.width} м; задано ${s.count}`);
+  }
   let score=72;
   if(m.soil==='unknown') reasons.push('почва не проверена');
   else if(meta.soil.includes(m.soil)){score+=9;reasons.push('условная совместимость с указанной почвой');}
@@ -265,6 +275,19 @@ function renderEco(site,result) {
   const after=before!==null?Math.min(area,before+result.eco[1].canopy):null;
   $('ecoEffect').innerHTML=`<table class="mvp-table"><thead><tr><th>Горизонт</th><th>Крона</th><th>CO₂/год</th><th>Осадки/год</th></tr></thead><tbody>${result.eco.map(e=>`<tr><th>${e.year} лет</th><td>≈ ${nf.format(e.canopy)} м²</td><td>≈ ${nf.format(e.co2Kg)} кг</td><td>≈ ${e.rainM3.toFixed(1)} м³</td></tr>`).join('')}</tbody></table><p class="mvp-callout">Зелёная площадь «до / после» к 10-му году: <strong>${before===null?'нет данных':`${nf.format(before)} → ${nf.format(after)} м²`}</strong>. Стоимость на 1 м² ожидаемой кроны к 10-му году: <strong>${money(result.total/Math.max(result.eco[1].canopy,1))}</strong>.</p><p class="field-note">CO₂: 0,6 кг/м² кроны/год; задержание осадков: 0,02 м³/м²/год; рост кроны и потери деревьев — <strong>синтетические коэффициенты проекта</strong>, не измерения Павлодара. Пыль, кислород и снижение температуры без локальных коэффициентов не рассчитываются. Крона может пересекаться с существующей зеленью.</p>`;
 }
+function renderPlantingLayout(site,result) {
+  const speciesIds=result.components.map(item=>item.id);
+  const layout=plantingLayoutFor(site,speciesIds,result.s.count);
+  const fitBlocks=speciesIds.flatMap(id=>suitability(site,id).blocks);
+  const ready=!layout.error&&layout.capacity>=result.s.count&&!fitBlocks.length;
+  const box=$('plantingLayoutStatus');
+  box.className='planting-layout'+(ready?' ready':' blocked');
+  if(layout.error)box.textContent=`Схема точек недоступна: ${layout.error}`;
+  else box.textContent=`${layout.capacity>=5001?'Более 5000':layout.capacity} расчётных мест при шаге ${layout.spacing} м и отступе ${layout.inset} м от границы; задано ${result.s.count}. ${ready?'Показаны на карте. Выгрузите GeoJSON для выездной проверки.':fitBlocks.length?`План ограничен: ${fitBlocks[0]}.`:'Уменьшите количество или измените контур.'} Точки не проверяют сети, грунт и существующие деревья.`;
+  $('downloadPlantingBtn').disabled=!ready;
+  currentPlantingLayout={siteId:site.id,siteName:site.name,layout,ready,components:result.components.map(item=>({id:item.id,count:item.count}))};
+  updatePlantingMap();
+}
 function renderMvpPanels() {
   const site=selected();if(!site)return;
   const result=mvpCalculate(site);
@@ -277,6 +300,7 @@ function renderMvpPanels() {
   renderSurvival(site,result);
   renderCare(site,result);
   renderEco(site,result);
+  renderPlantingLayout(site,result);
   renderProblems();
 }
 
@@ -294,11 +318,19 @@ function updateMvpMap() {
   if(!map?.getSource('mvp-zones'))return;
   map.getSource('mvp-zones').setData(mvpMapFeatures());
 }
+function updatePlantingMap() {
+  if(!map?.getSource('mvp-planting'))return;
+  const selectedSite=selected(),current=currentPlantingLayout;
+  const visible=current?.siteId===selectedSite?.id&&!current.layout.error;
+  const points=visible?current.layout.points:[];
+  map.getSource('mvp-planting').setData({type:'FeatureCollection',features:points.map((coordinates,index)=>({type:'Feature',geometry:{type:'Point',coordinates},properties:{number:index+1,siteId:current.siteId,ready:current.ready}}))});
+}
 function setMvpLayerVisibility() {
   if(!map?.getLayer('mvp-problem-line'))return;
   const problem=$('problemLayerToggle').checked?'visible':'none',priority=$('priorityLayerToggle').checked?'visible':'none';
   for(const id of ['mvp-problem-line','mvp-problem-point'])map.setLayoutProperty(id,'visibility',problem);
   for(const id of ['mvp-priority-fill','mvp-priority-point'])map.setLayoutProperty(id,'visibility',priority);
+  if(map.getLayer('mvp-planting-points'))map.setLayoutProperty('mvp-planting-points','visibility',$('plantingLayerToggle').checked?'visible':'none');
 }
 function initMvpMap() {
   if(!map || map.getSource('mvp-zones'))return;
@@ -307,7 +339,10 @@ function initMvpMap() {
   map.addLayer({id:'mvp-priority-point',type:'circle',source:'mvp-zones',filter:['==',['geometry-type'],'Point'],paint:{'circle-radius':15,'circle-color':['interpolate',['linear'],['get','score'],0,'#cbd5c9',50,'#e4bc62',100,'#bf624c'],'circle-opacity':.45},layout:{visibility:'none'}},'site-halo');
   map.addLayer({id:'mvp-problem-line',type:'line',source:'mvp-zones',filter:['all',['==',['geometry-type'],'Polygon'],['!=',['get','severity'],'none']],paint:{'line-color':['match',['get','severity'],'high','#c65d47','medium','#d99b42','#859f5f'],'line-width':4,'line-dasharray':[2,1]}},'site-outline');
   map.addLayer({id:'mvp-problem-point',type:'circle',source:'mvp-zones',filter:['all',['==',['geometry-type'],'Point'],['!=',['get','severity'],'none']],paint:{'circle-radius':16,'circle-color':['match',['get','severity'],'high','#c65d47','medium','#d99b42','#859f5f'],'circle-opacity':.38}},'site-halo');
+  map.addSource('mvp-planting',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  map.addLayer({id:'mvp-planting-points',type:'circle',source:'mvp-planting',paint:{'circle-radius':5,'circle-color':['case',['get','ready'],'#1a6441','#bd7e35'],'circle-stroke-color':'#ffffff','circle-stroke-width':1.5,'circle-opacity':.95}});
   setMvpLayerVisibility();
+  updatePlantingMap();
 }
 
 planCity=function(){
@@ -349,6 +384,14 @@ planCity=function(){
 function mvpDownload(name,contents,type='text/html;charset=utf-8') {
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([contents],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
+function downloadPlantingPoints() {
+  const current=currentPlantingLayout;
+  if(!current?.ready||current.siteId!==selected()?.id)return;
+  const secondary=current.components[1]?.count||0,total=current.layout.points.length;
+  const data={type:'FeatureCollection',name:`ZhasylQala · ${current.siteName} · расчётные точки`,properties:{status:'illustrative',note:'Точки требуют выездной проверки грунта, коммуникаций, существующих насаждений и права на посадку.',spacingMetres:current.layout.spacing,insetMetres:current.layout.inset},features:current.layout.points.map((coordinates,index)=>({type:'Feature',geometry:{type:'Point',coordinates},properties:{number:index+1,siteId:current.siteId,siteName:current.siteName,species:secondary&&Math.floor((index+1)*secondary/total)>Math.floor(index*secondary/total)?current.components[1].id:current.components[0].id,status:'illustrative'}}))};
+  mvpDownload('zhasylqala-planting-points.geojson',JSON.stringify(data,null,2),'application/geo+json');
+  toast(`${data.features.length} расчётных точек скачано для проверки на месте.`);
+}
 downloadReport=function(){
   planCity();
   const site=selected(),result=mvpCalculate(site),m=zoneFor(site),p=priorityIndex(site),area=zoneArea(site.geometry);
@@ -367,7 +410,8 @@ function bindMvpUI(){
   }
   renderPriorityWeights();
   $('problemFilter').addEventListener('change',renderProblems);
-  for(const id of ['problemLayerToggle','priorityLayerToggle'])$(id).addEventListener('change',setMvpLayerVisibility);
+  for(const id of ['problemLayerToggle','priorityLayerToggle','plantingLayerToggle'])$(id).addEventListener('change',setMvpLayerVisibility);
+  $('downloadPlantingBtn').addEventListener('click',downloadPlantingPoints);
   for(const id of ['zonePurpose','zoneSoil','zoneLight','zoneRoad','zoneClearance','zoneGreen'])$(id).addEventListener('change',()=>{
     const site=selected(),m=zoneFor(site);
     m.purpose=$('zonePurpose').value;m.soil=$('zoneSoil').value;m.light=$('zoneLight').value;m.road=$('zoneRoad').value;
