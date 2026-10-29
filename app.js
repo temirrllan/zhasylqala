@@ -27,7 +27,7 @@ const COVER_CLASSES = {
   '0,207,117': 'Мангры',
   '250,230,160': 'Мхи и лишайники',
 };
-const CHECK_DEFAULTS = {soil:'unknown',water:'unknown',utilities:'unknown',land:'unknown'};
+const CHECK_DEFAULTS = {soil:'unknown',water:'unknown',utilities:'unknown',overhead:'unknown',land:'unknown'};
 
 function defaultScenario(species='linden', count=12, need=2) {
   const tree = SPECIES[species];
@@ -76,6 +76,7 @@ function checksFor(site) {
     soil:['unknown','ok','prep'].includes(raw.soil)?raw.soil:'unknown',
     water:['unknown','yes','no'].includes(raw.water)?raw.water:'unknown',
     utilities:['unknown','clear','conflict'].includes(raw.utilities)?raw.utilities:'unknown',
+    overhead:['unknown','clear','conflict'].includes(raw.overhead)?raw.overhead:'unknown',
     land:['unknown','yes','no'].includes(raw.land)?raw.land:'unknown',
   };
 }
@@ -87,6 +88,8 @@ function checkIssues(site) {
   if(c.water==='no') blockers.push('нет подтверждённого источника воды для ухода');
   if(c.utilities==='unknown') issues.push('подземные сети');
   if(c.utilities==='conflict') blockers.push('конфликт с подземными сетями');
+  if(c.overhead==='unknown') issues.push('воздушные линии');
+  if(c.overhead==='conflict') blockers.push('конфликт с воздушными линиями');
   if(c.land==='unknown') issues.push('право на участок');
   if(c.land==='no') blockers.push('посадка на участке не согласована');
   const review=EvidenceReview.compare(site.coverClass,site.observation);
@@ -138,11 +141,24 @@ function renderChecks(site) {
   $('soilCheck').value=c.soil;
   $('waterCheck').value=c.water;
   $('utilityCheck').value=c.utilities;
+  $('overheadCheck').value=c.overhead;
   $('landCheck').value=c.land;
   box.className='check-status'+(result.blockers.length?' blocked':result.issues.length?'':' ready');
   if(result.blockers.length) box.textContent=`Не включать в план: ${result.blockers.join('; ')}.`;
   else if(result.issues.length) box.textContent=`Предварительный сценарий. Проверить: ${result.issues.join(', ')}.`;
   else box.textContent='Базовые проверки отмечены. Породу и место посадки должен подтвердить специалист.';
+}
+function renderFieldAudit(site) {
+  const audit=FieldAudit.evaluate(site),inspection=audit.inspection;
+  $('inspectionDate').value=inspection.visitDate||'';
+  $('inspectionRef').value=inspection.evidenceRef;
+  $('inspectionNotes').value=inspection.notes;
+  const status=$('fieldAuditStatus');
+  status.className=`field-audit-status ${audit.status}`;
+  status.textContent=audit.label;
+  const actions=[...audit.blocked,...audit.missing];
+  $('fieldAuditSummary').textContent=audit.status==='review'?'Полевые сведения заполнены. Перед посадкой специалист должен подтвердить породу, схему и смету.':audit.status==='demo'?'Учебный участок можно использовать для показа расчёта. Для реальной работы нужны собственные границы.':audit.status==='blocked'?'Зафиксировано препятствие. Сначала устраните его или выберите другой участок.':`До экспертной проверки осталось действий: ${actions.length}.`;
+  $('fieldAuditActions').innerHTML=actions.map(item=>`<li>${esc(item)}</li>`).join('');
 }
 function renderEvidenceReview(site) {
   const review=EvidenceReview.compare(site.coverClass,site.observation),o=review.observation;
@@ -287,6 +303,7 @@ function renderScenario() {
   } else budget.textContent=`В пределах лимита · остаток ${money(s.budget-result.total)}`;
   renderEvidenceReview(site);
   renderChecks(site);
+  renderFieldAudit(site);
   renderRecommendations(site);
   save();
   loadClimate(c);
@@ -348,7 +365,7 @@ function finishPolygon() {
   addSite({type:'Polygon',coordinates:[[...unique,unique[0]]]});
 }
 function geojson() {
-  return {type:'FeatureCollection',name:'ZhasylQala Pavlodar plan',features:state.sites.map(site=>({type:'Feature',id:site.id,geometry:site.geometry,properties:{name:site.name,demo:site.demo,scenario:scenarioFor(site),checks:checksFor(site),observation:site.observation?EvidenceReview.normalize(site.observation):null,mvp:site.mvp||null,model:'synthetic-expert-logistic-v1'}}))};
+  return {type:'FeatureCollection',name:'ZhasylQala Pavlodar plan',features:state.sites.map(site=>({type:'Feature',id:site.id,geometry:site.geometry,properties:{name:site.name,demo:site.demo,scenario:scenarioFor(site),checks:checksFor(site),observation:site.observation?EvidenceReview.normalize(site.observation):null,inspection:site.inspection?FieldAudit.normalize(site.inspection):null,mvp:site.mvp||null,model:'synthetic-expert-logistic-v1'}}))};
 }
 function exportGeoJSON() {
   const blob=new Blob([JSON.stringify(geojson(),null,2)],{type:'application/geo+json'});
@@ -400,7 +417,8 @@ async function importGeoJSON(file) {
       const scenario=raw && typeof raw==='object'?{...defaultScenario(),...raw}:defaultScenario();
       const checks=f.properties?.checks && typeof f.properties.checks==='object'?f.properties.checks:CHECK_DEFAULTS;
       const observation=f.properties?.observation&&typeof f.properties.observation==='object'?EvidenceReview.normalize(f.properties.observation):null;
-      state.sites.push({id,name,geometry:f.geometry,demo:false,scenario,checks,observation,mvp:f.properties?.mvp&&typeof f.properties.mvp==='object'?f.properties.mvp:null});
+      const inspection=f.properties?.inspection&&typeof f.properties.inspection==='object'?FieldAudit.normalize(f.properties.inspection):null;
+      state.sites.push({id,name,geometry:f.geometry,demo:false,scenario,checks,observation,inspection,mvp:f.properties?.mvp&&typeof f.properties.mvp==='object'?f.properties.mvp:null});
     }
     chooseSite(state.sites[state.sites.length-valid.length].id,true);
     invalidatePlan();
@@ -528,8 +546,29 @@ function planCity() {
 function invalidatePlan() { lastPlan=null;$('priorityResult').textContent='Параметры изменились. Нажмите «Составить план», чтобы обновить очередь.'; }
 function readChecks() {
   const site=selected();
-  site.checks={soil:$('soilCheck').value,water:$('waterCheck').value,utilities:$('utilityCheck').value,land:$('landCheck').value};
-  renderChecks(site);renderRecommendations(site);invalidatePlan();save();
+  site.checks={soil:$('soilCheck').value,water:$('waterCheck').value,utilities:$('utilityCheck').value,overhead:$('overheadCheck').value,land:$('landCheck').value};
+  renderChecks(site);renderFieldAudit(site);renderRecommendations(site);invalidatePlan();save();
+}
+function downloadVisitTask() {
+  const site=selected(),audit=FieldAudit.evaluate(site),c=centroid(site.geometry),checks=checksFor(site),zone=site.mvp||{};
+  const rows=[
+    ['Поверхность сейчас',site.observation?.source==='field'?EvidenceReview.KINDS[EvidenceReview.normalize(site.observation).kind]:'Требуется выезд'],
+    ['Почва',{unknown:'Не проверена',ok:'Отмечена как проверенная',prep:'Нужна подготовка'}[checks.soil]],
+    ['Вода',{unknown:'Не проверена',yes:'Отмечена как доступная',no:'Не доступна'}[checks.water]],
+    ['Подземные сети',{unknown:'Не проверены',clear:'Конфликт не отмечен',conflict:'Есть конфликт'}[checks.utilities]],
+    ['Воздушные линии',{unknown:'Не проверены',clear:'Конфликт не отмечен',conflict:'Есть конфликт'}[checks.overhead]],
+    ['Право на участок',{unknown:'Не проверено',yes:'Согласование отмечено',no:'Нет согласования'}[checks.land]],
+    ['Назначение участка',{park:'Парк / сквер',courtyard:'Двор',street:'Улица',school:'Школа / детсад',hospital:'Больница'}[zone.purpose]||'Не указано'],
+    ['Свободная ширина',Number(zone.clearance)>0?`${zone.clearance} м`:'Не измерена'],
+    ['Освещённость',{sun:'Открытое солнце',shade:'Полутень / тень'}[zone.light]||'Не отмечена'],
+    ['Дорога рядом',{yes:'Да',no:'Нет'}[zone.road]||'Не отмечено'],
+    ['Доля существующей зелени',Number.isFinite(Number(zone.greenShare))&&zone.greenShare!==null?`${Math.round(Number(zone.greenShare)*100)}%`:'Не оценена'],
+  ];
+  const actions=[...audit.blocked,...audit.missing];
+  const html=`<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>ZhasylQala — задание на обследование</title><style>body{font:14px/1.55 Arial,sans-serif;color:#18342d;max-width:820px;margin:32px auto;padding:0 20px}h1{font-size:26px}h2{margin-top:25px;font-size:18px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #cddbcf;padding:9px;text-align:left;vertical-align:top}th{background:#edf4eb}.note{background:#fff1dd;padding:12px;border-left:4px solid #c98635}.blank{height:42px}li{margin:6px 0}@media print{body{margin:0;padding:0}}</style></head><body><h1>Задание на обследование участка</h1><p><strong>${esc(site.name)}</strong> · ${c[1].toFixed(5)}° N, ${c[0].toFixed(5)}° E · ${site.geometry.type==='Polygon'?'контур нанесён':'только точка, нужны границы'}</p><p>Дата подготовки: ${esc(new Date().toLocaleDateString('ru-RU'))}. Текущий статус: <strong>${esc(audit.label)}</strong>.</p><p class="note">Это задание на выезд, не разрешение на посадку. Демо-геометрию и введённые значения нужно сверить с реальным участком.</p><h2>Что выяснить</h2><ol>${(actions.length?actions:['Повторно подтвердить все данные и передать агроному для решения.']).map(item=>`<li>${esc(item)}</li>`).join('')}</ol><h2>Полевой лист</h2><table><thead><tr><th>Проверка</th><th>Что уже внесено</th><th>Подтверждение / замечания</th></tr></thead><tbody>${rows.map(([label,value])=>`<tr><td>${esc(label)}</td><td>${esc(value||'Нет данных')}</td><td class="blank"></td></tr>`).join('')}</tbody></table><h2>Сведения о выезде</h2><p>Дата: ${esc(audit.inspection.visitDate||'________________')}<br>Акт или фото: ${esc(audit.inspection.evidenceRef||'________________')}<br>Заметки: ${esc(audit.inspection.notes||'________________')}</p><p>Обследовал: ____________________ &nbsp; Проверил специалист: ____________________</p></body></html>`;
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'}),link=document.createElement('a');
+  link.href=URL.createObjectURL(blob);link.download='zhasylqala-zadanie-na-obsledovanie.html';link.click();setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+  toast('Задание на выезд скачано. Его можно распечатать или сохранить в PDF.');
 }
 function downloadReport() {
   planCity();
@@ -581,14 +620,20 @@ function bindUI() {
   $('planBtn').addEventListener('click',planCity);
   $('reportBtn').addEventListener('click',downloadReport);
   $('compareGoal').addEventListener('change',()=>renderRecommendations(selected()));
-  for(const id of ['soilCheck','waterCheck','utilityCheck','landCheck']) $(id).addEventListener('change',readChecks);
+  for(const id of ['soilCheck','waterCheck','utilityCheck','overheadCheck','landCheck']) $(id).addEventListener('change',readChecks);
   for(const id of ['surfaceObservation','observationSource']) $(id).addEventListener('change',()=>{
     const site=selected(),kind=$('surfaceObservation').value;
     site.observation=kind==='unknown'?null:EvidenceReview.normalize({kind,source:$('observationSource').value,recordedAt:new Date().toISOString().slice(0,10)});
-    renderEvidenceReview(site);renderChecks(site);renderRecommendations(site);
+    renderEvidenceReview(site);renderChecks(site);renderFieldAudit(site);renderRecommendations(site);
     window.onObservationChanged?.(site);
     invalidatePlan();save();
   });
+  for(const id of ['inspectionDate','inspectionRef','inspectionNotes']) $(id).addEventListener('change',()=>{
+    const site=selected();
+    site.inspection=FieldAudit.normalize({visitDate:$('inspectionDate').value,evidenceRef:$('inspectionRef').value,notes:$('inspectionNotes').value});
+    renderFieldAudit(site);invalidatePlan();save();
+  });
+  $('visitTaskBtn').addEventListener('click',downloadVisitTask);
   $('siteName').addEventListener('change',()=>{
     const name=$('siteName').value.trim().slice(0,70);
     if(!name){$('siteName').value=selected().name;return;}

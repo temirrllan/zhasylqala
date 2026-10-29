@@ -7,14 +7,14 @@ const MVP_SPECIES = {
   maple:{width:8,drought:1,salt:0,shade:1,road:1,soil:['loam']},
   ash:{width:9,drought:2,salt:1,shade:1,road:2,soil:['loam','sand']},
 };
-const MVP_DEFAULTS={purpose:'courtyard',soil:'unknown',light:'unknown',road:'unknown',clearance:12,greenShare:null,source:'manual'};
+const MVP_DEFAULTS={purpose:'unknown',soil:'unknown',light:'unknown',road:'unknown',clearance:null,greenShare:null,source:'manual'};
 const MVP_WEIGHTS={green:35,social:25,pressure:20,effect:20};
 const MVP_DEMO_ZONES=[
   {id:'mvp-zone-1',name:'Демо-зона 1 · дефицит зелени',center:[76.954,52.294],mvp:{purpose:'school',soil:'loam',light:'sun',road:'yes',clearance:9,greenShare:.16,source:'synthetic'}},
   {id:'mvp-zone-2',name:'Демо-зона 2 · у дороги',center:[76.988,52.277],species:'pine',mvp:{purpose:'street',soil:'sand',light:'sun',road:'yes',clearance:7,greenShare:.31,source:'synthetic'}},
   {id:'mvp-zone-3',name:'Демо-зона 3 · двор',center:[76.938,52.273],mvp:{purpose:'courtyard',soil:'loam',light:'shade',road:'no',clearance:10,greenShare:.48,source:'synthetic'}},
 ];
-const PURPOSE_LABELS={park:'Парк / сквер',courtyard:'Двор',street:'Улица',school:'Школа / детсад',hospital:'Больница'};
+const PURPOSE_LABELS={unknown:'Не указано',park:'Парк / сквер',courtyard:'Двор',street:'Улица',school:'Школа / детсад',hospital:'Больница'};
 const SOIL_LABELS={unknown:'нет данных',loam:'суглинок',sand:'песчаная',saline:'засоленная'};
 const ECO_COEFFICIENTS={co2KgPerCanopyM2Year:.6,rainM3PerCanopyM2Year:.02,annualRetention:.98};
 let currentPlantingLayout=null;
@@ -26,11 +26,11 @@ function mvpPolygon(center) {
 function zoneFor(site) {
   const raw={...MVP_DEFAULTS,...(site?.mvp||{})};
   return {
-    purpose:Object.hasOwn(PURPOSE_LABELS,raw.purpose)?raw.purpose:'courtyard',
+    purpose:Object.hasOwn(PURPOSE_LABELS,raw.purpose)?raw.purpose:'unknown',
     soil:Object.hasOwn(SOIL_LABELS,raw.soil)?raw.soil:'unknown',
     light:['unknown','sun','shade'].includes(raw.light)?raw.light:'unknown',
     road:['unknown','yes','no'].includes(raw.road)?raw.road:'unknown',
-    clearance:sanitizeNumber(raw.clearance,12,0,50),
+    clearance:raw.clearance===null||raw.clearance===''?null:sanitizeNumber(raw.clearance,null,0,50),
     greenShare:raw.greenShare===null||raw.greenShare===''?null:sanitizeNumber(raw.greenShare,0,0,1),
     source:raw.source==='synthetic'?'synthetic':'manual',
   };
@@ -184,7 +184,7 @@ function renderZoneFacts(site) {
   $('zoneSoil').value=m.soil;
   $('zoneLight').value=m.light;
   $('zoneRoad').value=m.road;
-  $('zoneClearance').value=m.clearance;
+  $('zoneClearance').value=m.clearance??'';
   $('zoneGreen').value=m.greenShare===null?'':Math.round(m.greenShare*100);
 }
 function renderScheme(site,result) {
@@ -294,6 +294,7 @@ function renderPlantingLayout(site,result) {
 }
 function renderMvpPanels() {
   const site=selected();if(!site)return;
+  renderFieldAudit(site);
   const result=mvpCalculate(site);
   const fit=suitability(site,result.s.species),second=result.hasMix?suitability(site,result.s.secondarySpecies):null;
   $('selectedSuitabilityStatus').className='selection-status'+(fit.blocks.length?' blocked':'');
@@ -353,7 +354,8 @@ function initMvpMap() {
 planCity=function(){
   state.cityBudget=sanitizeNumber($('cityBudget').value,state.cityBudget,0);
   $('cityBudget').value=state.cityBudget;
-  const all=state.sites.map(site=>{const result=mvpCalculate(site),s=result.s;return {site,result,priority:priorityIndex(site),blockers:[...(site.geometry.type==='Polygon'?[]:['нужен полигон зоны']),...suitability(site,s.species).blocks,...(result.hasMix?suitability(site,s.secondarySpecies).blocks:[])]};});
+  const candidates=FieldAudit.planningCandidates(state.sites);
+  const all=candidates.sites.map(site=>{const result=mvpCalculate(site),s=result.s,audit=FieldAudit.evaluate(site),fieldBlock=FieldAudit.queueBlocker(site);return {site,result,priority:priorityIndex(site),audit,blockers:[...(site.geometry.type==='Polygon'?[]:['нужен полигон зоны']),...(fieldBlock?[fieldBlock]:[]),...suitability(site,s.species).blocks,...(result.hasMix?suitability(site,s.secondarySpecies).blocks:[])]};});
   const excluded=all.filter(row=>row.blockers.length||row.result.total>row.result.s.budget);
   const rows=all.filter(row=>!excluded.includes(row));
   let picked=[],exact=rows.length<=18;
@@ -375,13 +377,13 @@ planCity=function(){
   }
   picked.sort((a,b)=>b.priority.score-a.priority.score);
   const spent=picked.reduce((sum,row)=>sum+row.result.total,0);
-  lastPlan={picked,excluded,spent,exact};
+  lastPlan={picked,excluded,spent,exact,mode:candidates.mode};
   const box=$('priorityResult');
-  if(!picked.length)box.textContent=rows.length?'Ни один полный сценарий не помещается в общий бюджет. Уменьшите количество растений или скорректируйте смету.':'Участки ограничены проверками либо превышают собственный лимит.';
+  if(!picked.length)box.textContent=rows.length?'Ни один полный сценарий не помещается в общий бюджет. Уменьшите количество растений или скорректируйте смету.':`Зоны пока не проходят проверки: ${excluded.filter(row=>row.site.geometry.type==='Polygon').slice(0,3).map(row=>`${row.site.name} — ${row.blockers[0]||'превышен лимит зоны'}`).join('; ')||'добавьте реальный полигон и заполните обследование'}.`;
   else {
     const pointCount=excluded.filter(row=>row.site.geometry.type==='Point').length;
     const otherExcluded=excluded.filter(row=>row.site.geometry.type!=='Point');
-    box.innerHTML=`<strong>${picked.length} из ${state.sites.filter(site=>site.geometry.type==='Polygon').length} зон · ${money(spent)}</strong><ol>${picked.map(row=>`<li>${esc(row.site.name)} · ${row.priority.score}/100 · ${money(row.result.total)}</li>`).join('')}</ol><span>Цель: максимум суммы «индекс приоритета × ожидаемая крона к 10-му году» в пределах бюджета. ${exact?'Точный перебор полных сценариев.':'Приближённый отбор для более 18 зон.'} ${pointCount?`${pointCount} точек без границ не включены. `:''}${otherExcluded.length?`Исключены: ${otherExcluded.map(row=>`${esc(row.site.name)} (${esc(row.blockers[0]||'превышен лимит зоны')})`).join(', ')}. `:''}Результат предварительный.</span>`;
+    box.innerHTML=`<strong>${picked.length} из ${candidates.sites.filter(site=>site.geometry.type==='Polygon').length} зон · ${money(spent)}</strong><ol>${picked.map(row=>`<li>${esc(row.site.name)} ${row.site.demo?'· демо':'· к экспертной проверке'} · ${row.priority.score}/100 · ${money(row.result.total)}</li>`).join('')}</ol><span>${candidates.mode==='demo'?'Учебный расчёт по демо-зонам.':'Предварительный отбор только по реальным участкам; учебные зоны исключены.'} Реальные зоны входят в очередь только после заполнения полевого обследования; решение о посадке принимает специалист. Цель: максимум суммы «индекс приоритета × ожидаемая крона к 10-му году» в пределах бюджета. ${exact?'Точный перебор полных сценариев.':'Приближённый отбор для более 18 зон.'} ${pointCount?`${pointCount} точек без границ не включены. `:''}${otherExcluded.length?`Исключены: ${otherExcluded.map(row=>`${esc(row.site.name)} (${esc(row.blockers[0]||'превышен лимит зоны')})`).join(', ')}. `:''}</span>`;
   }
   save();updateMvpMap();
 };
@@ -400,14 +402,15 @@ function downloadPlantingPoints() {
 downloadReport=function(){
   planCity();
   const site=selected(),result=mvpCalculate(site),m=zoneFor(site),p=priorityIndex(site),area=zoneArea(site.geometry);
+  const selectedAudit=FieldAudit.evaluate(site);
   const evidenceText=z=>{
     const review=EvidenceReview.compare(z.coverClass,z.observation),o=review.observation;
     const observation=o.kind==='unknown'?'не отмечено':`${EvidenceReview.KINDS[o.kind]} (${EvidenceReview.SOURCES[o.source]}${o.recordedAt?`, ${o.recordedAt}`:''})`;
     const comparison={unreviewed:'нет сравнения',uncomparable:'нет сопоставимого класса',match:'совпадает',conflict:'расхождение'}[review.status];
     return `WorldCover 2021: ${z.coverClass||'нет данных'}; сейчас: ${observation}; результат: ${comparison}`;
   };
-  const rows=state.sites.map(z=>{const r=mvpCalculate(z),pr=priorityIndex(z),issue=checkIssues(z),status=[...(z.geometry.type==='Point'?['точка без границ; вне очереди']:[]),...issue.blockers,...suitability(z,r.s.species).blocks,...(r.hasMix?suitability(z,r.s.secondarySpecies).blocks:[])];return `<tr><td>${esc(z.name)}</td><td>${pr.score}/100</td><td>${esc(problemsFor(z).map(x=>x.cause).join(', ')||'Нет выявленных по доступным данным')}</td><td>${esc(evidenceText(z))}</td><td>${r.components.map(item=>`${esc(SPECIES[item.id].name)} × ${item.count}`).join(' + ')}</td><td>${money(r.total)}</td><td>${Math.round(r.probability*100)}%</td><td>${nf.format(r.eco[1].canopy)} м²</td><td>${esc(status.join('; ')||'Проверить на месте')}</td></tr>`;}).join('');
-  const body=`<h1>ZhasylQala — предварительный план</h1><p>Павлодар · ${new Intl.DateTimeFormat('ru-RU',{dateStyle:'long'}).format(new Date())} · ${state.sites.length} участков (${state.sites.filter(z=>z.geometry.type==='Polygon').length} зоны) · бюджет ${money(state.cityBudget)}</p><div class="warning">Демонстрационный расчёт. Данные демо-зон, цены, свойства растений, обучающие метки ML-модели и коэффициенты эффекта синтетические. Посадку утверждает специалист после проверки на месте.</div><h2>Очередь работ</h2><p>Выбрано ${lastPlan.picked.length} зон на ${money(lastPlan.spent)}. Цель: индекс приоритета × ожидаемая крона к 10 году.</p><ol>${lastPlan.picked.map(x=>`<li>${esc(x.site.name)} — ${x.priority.score}/100, ${money(x.result.total)}</li>`).join('')}</ol><h2>Сводка по всем участкам</h2><table><thead><tr><th>Зона</th><th>Приоритет</th><th>Проблемы</th><th>Поверхность и источник</th><th>Порода</th><th>Смета</th><th>3-й год</th><th>Крона 10 лет</th><th>Ограничения</th></tr></thead><tbody>${rows}</tbody></table><h2>Выбранная зона: ${esc(site.name)}</h2><p>${esc(PURPOSE_LABELS[m.purpose])}; площадь ${area===null?'не определена':nf.format(area)+' м²'}; доля зелени ${m.greenShare===null?'нет данных':Math.round(m.greenShare*100)+'%'}; почва ${esc(SOIL_LABELS[m.soil])}; индекс ${p.score}/100. Источник условий: ${m.source==='synthetic'?'синтетический демо-набор':'ручной ввод'}.</p><p>${esc($('dataQuality').textContent)}</p><p><strong>Поверхность:</strong> ${esc(evidenceText(site))}. Ручная отметка не проверяется автоматически.</p><h3>Подбор и смета</h3><p>${result.components.map(item=>`${esc(SPECIES[item.id].name)} × ${item.count} (пригодность ${suitability(site,item.id).score}/100)`).join(' + ')}. Срок ухода ${result.s.careYears} г.</p>${$('costBreakdown').innerHTML}<h3>Приживаемость и риски</h3>${$('survivalAnalysis').innerHTML}<h3>Календарь ухода</h3>${$('careCalendar').innerHTML}<h3>Экологический эффект</h3>${$('ecoEffect').innerHTML}<h2>Метод и ограничения</h2><p>Карта OpenFreeMap / OSM; покров ESA WorldCover 2021; климат Open-Meteo 2023–2025. Локальные проверки, свойства каталога, цены и коэффициенты модели и эффекта требуют подтверждения. ML-модель — логистическая регрессия по 336 синтетическим экспертным примерам; она не проверена на реальных посадках. Для почвы, существующих насаждений и населения нет данных организатора. Оценки CO₂/осадков основаны на демонстрационных коэффициентах, остальные эффекты не рассчитывались.</p>`;
+  const rows=state.sites.map(z=>{const r=mvpCalculate(z),pr=priorityIndex(z),issue=checkIssues(z),status=[...(z.geometry.type==='Point'?['точка без границ; вне очереди']:[]),...issue.blockers,...suitability(z,r.s.species).blocks,...(r.hasMix?suitability(z,r.s.secondarySpecies).blocks:[])];return `<tr><td>${esc(z.name)}</td><td>${pr.score}/100</td><td>${esc(problemsFor(z).map(x=>x.cause).join(', ')||'Нет выявленных по доступным данным')}</td><td>${esc(evidenceText(z))}</td><td>${esc(FieldAudit.evaluate(z).label)}</td><td>${r.components.map(item=>`${esc(SPECIES[item.id].name)} × ${item.count}`).join(' + ')}</td><td>${money(r.total)}</td><td>${Math.round(r.probability*100)}%</td><td>${nf.format(r.eco[1].canopy)} м²</td><td>${esc(status.join('; ')||'Проверить на месте')}</td></tr>`;}).join('');
+  const body=`<h1>ZhasylQala — предварительный план</h1><p>Павлодар · ${new Intl.DateTimeFormat('ru-RU',{dateStyle:'long'}).format(new Date())} · ${state.sites.length} участков (${state.sites.filter(z=>z.geometry.type==='Polygon').length} зоны) · бюджет ${money(state.cityBudget)}</p><div class="warning">Демонстрационный расчёт. Данные демо-зон, цены, свойства растений, обучающие метки ML-модели и коэффициенты эффекта синтетические. Посадку утверждает специалист после проверки на месте. Реальные зоны попадают в предварительную очередь только после заполнения полевого обследования; демо-зоны помечены отдельно.</div><h2>Очередь работ</h2><p>Режим: ${lastPlan.mode==='real'?'только реальные участки, демо исключены':'учебные демо-зоны'}. Выбрано ${lastPlan.picked.length} зон на ${money(lastPlan.spent)}. Цель: индекс приоритета × ожидаемая крона к 10 году.</p><ol>${lastPlan.picked.map(x=>`<li>${esc(x.site.name)} — ${x.priority.score}/100, ${money(x.result.total)}</li>`).join('')}</ol><h2>Сводка по всем участкам</h2><table><thead><tr><th>Зона</th><th>Приоритет</th><th>Проблемы</th><th>Поверхность и источник</th><th>Полевой статус</th><th>Порода</th><th>Смета</th><th>3-й год</th><th>Крона 10 лет</th><th>Ограничения</th></tr></thead><tbody>${rows}</tbody></table><h2>Выбранная зона: ${esc(site.name)}</h2><p>${esc(PURPOSE_LABELS[m.purpose])}; площадь ${area===null?'не определена':nf.format(area)+' м²'}; доля зелени ${m.greenShare===null?'нет данных':Math.round(m.greenShare*100)+'%'}; почва ${esc(SOIL_LABELS[m.soil])}; индекс ${p.score}/100. Источник условий: ${m.source==='synthetic'?'синтетический демо-набор':'ручной ввод'}.</p><p>${esc($('dataQuality').textContent)}</p><p><strong>Поверхность:</strong> ${esc(evidenceText(site))}. Ручная отметка не проверяется автоматически.</p><p><strong>Полевой статус:</strong> ${esc(selectedAudit.label)}. Выезд: ${esc(selectedAudit.inspection.visitDate||"не указан")}; подтверждение: ${esc(selectedAudit.inspection.evidenceRef||"не указано")}. ${esc(selectedAudit.inspection.notes)}</p><p><strong>Следующие действия:</strong> ${esc([...selectedAudit.blocked,...selectedAudit.missing].join("; ")||"Передать специалисту для проверки породы, схемы и сметы.")}</p><h3>Подбор и смета</h3><p>${result.components.map(item=>`${esc(SPECIES[item.id].name)} × ${item.count} (пригодность ${suitability(site,item.id).score}/100)`).join(' + ')}. Срок ухода ${result.s.careYears} г.</p>${$('costBreakdown').innerHTML}<h3>Приживаемость и риски</h3>${$('survivalAnalysis').innerHTML}<h3>Календарь ухода</h3>${$('careCalendar').innerHTML}<h3>Экологический эффект</h3>${$('ecoEffect').innerHTML}<h2>Метод и ограничения</h2><p>Карта OpenFreeMap / OSM; покров ESA WorldCover 2021; климат Open-Meteo 2023–2025. Локальные проверки, свойства каталога, цены и коэффициенты модели и эффекта требуют подтверждения. ML-модель — логистическая регрессия по 336 синтетическим экспертным примерам; она не проверена на реальных посадках. Для почвы, существующих насаждений и населения нет данных организатора. Оценки CO₂/осадков основаны на демонстрационных коэффициентах, остальные эффекты не рассчитывались.</p>`;
   const html=`<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>ZhasylQala — отчёт</title><style>body{font:14px/1.55 Arial,sans-serif;color:#18342d;max-width:1180px;margin:36px auto;padding:0 24px}h1{font-size:29px}h2{margin-top:30px}table{border-collapse:collapse;width:100%;margin:16px 0}th,td{border:1px solid #d8e1d7;padding:8px;text-align:left;vertical-align:top}th{background:#edf4eb}.warning{background:#fff2dc;border-left:4px solid #c88535;padding:12px}.mvp-callout,.field-note{font-size:12px;color:#58705c}.year-grid{display:flex;gap:18px}.year-grid div{display:flex;flex-direction:column}.mvp-list p{margin:3px 0}@media print{body{margin:0;padding:0;font-size:11px}}</style></head><body>${body}</body></html>`;
   mvpDownload('zhasylqala-mvp-report.html',html);
   toast('Полный предварительный отчёт скачан; откройте и распечатайте в PDF.');
@@ -426,7 +429,7 @@ function bindMvpUI(){
   for(const id of ['zonePurpose','zoneSoil','zoneLight','zoneRoad','zoneClearance','zoneGreen'])$(id).addEventListener('change',()=>{
     const site=selected(),m=zoneFor(site);
     m.purpose=$('zonePurpose').value;m.soil=$('zoneSoil').value;m.light=$('zoneLight').value;m.road=$('zoneRoad').value;
-    m.clearance=sanitizeNumber($('zoneClearance').value,m.clearance,0,50);
+    m.clearance=$('zoneClearance').value===''?null:sanitizeNumber($('zoneClearance').value,m.clearance,0,50);
     m.greenShare=$('zoneGreen').value===''?null:sanitizeNumber($('zoneGreen').value,0,0,100)/100;
     m.source='manual';
     site.mvp=m;renderScenario();invalidatePlan();save();
@@ -449,7 +452,7 @@ function bindMvpUI(){
     s.secondarySpecies=$('secondarySpecies').value;
     site.scenario=s;renderScenario();invalidatePlan();save();
   });
-  for(const id of ['soilCheck','waterCheck','utilityCheck','landCheck'])$(id).addEventListener('change',renderMvpPanels);
+  for(const id of ['soilCheck','waterCheck','utilityCheck','overheadCheck','landCheck'])$(id).addEventListener('change',renderMvpPanels);
   if(map){if(map.loaded())initMvpMap();else map.on('load',initMvpMap);}
   renderSites();renderScenario();refreshMapData();planCity();
 }
